@@ -1,0 +1,19 @@
+{:paths ["src"]
+
+ ;; http-client: the Runtime API loop's transport (plain HTTP -> libc
+ ;; sockets; OpenSSL only for https). Public + pure Clojure-over-FFI, no
+ ;; local checkout needed -- :git/sha resolved by `joltc build` itself
+ ;; over HTTPS.
+ :deps {jolt-lang/http-client
+        {:git/url "https://github.com/jolt-lang/http-client"
+         :git/sha "35677c6eadefe93633da6ad8d9d7ca3c0f31b506"}}}
+
+;; NOTE on src/diplomat/*.clj: those files are NOT checked in (see
+;; .gitignore) -- they're jolt-diplomat's diplomat.runtime plus json_capi's
+;; generated diplomat.json-value/json-kind/json-error/alloc-stats, synced
+;; in by `bb sync-bindings` (dev, from a jolt-diplomat checkout) or by the
+;; Dockerfile's own bind.clj run (image build, inside AL2023). See
+;; json-bridge.clj and docs/guide/json-via-diplomat.md for why -- Jolt has
+;; no JSON library, so this project added a builder API to jolt-diplomat's
+;; existing serde_json-over-Diplomat example rather than reimplementing
+;; one from scratch.
