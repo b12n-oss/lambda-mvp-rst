@@ -43,16 +43,31 @@
           (System/exit 1))))
 
     (defn jolt-diplomat-dir
-      "Where jolt-diplomat is checked out: $JOLT_DIPLOMAT_DIR, else a sibling
-       directory, else the usual spot. nil when none of them exist. `bb
-       vendor` copies a subset of that checkout's source (backend/,
-       examples/json/json_capi/, runtime/, bind.clj) into vendor/ so the
-       Dockerfile can build json_capi's Rust cdylib + Clojure bindings for
-       AL2023/Linux inside the image, matching that OS's glibc -- see
-       docs/guide/json-via-diplomat.md."
+      "Where jolt-diplomat (with the JSON builder API this project needs) is
+       checked out: $JOLT_DIPLOMAT_DIR, else a sibling directory, else the
+       usual spots. nil when none of them exist. `bb vendor` copies a subset
+       of that checkout's source (backend/, examples/json/json_capi/,
+       runtime/, bind.clj) into vendor/ so the Dockerfile can build
+       json_capi's Rust cdylib + Clojure bindings for AL2023/Linux inside the
+       image, matching that OS's glibc.
+
+       The JSON builder API (constructors/mutators on JsonValue) and two
+       macOS-only .dylib portability fixes this project depends on are not
+       yet merged upstream (jolt-lang/jolt-diplomat) -- they live on the
+       `feat/json-builder-api` branch of the public fork
+       https://github.com/burinc/jolt-diplomat, pending PR review. Default
+       search order below prefers a checkout of *that* fork/branch
+       (~/dev/burinc/jolt-diplomat) over the private experimentation checkout
+       it was cherry-picked from (~/dev/github--jolt-lang--jolt-diplomat),
+       which is kept only as a last-resort fallback for this machine. Once
+       the PR merges, replace this whole vendoring scheme with a plain
+       `:git/url`/`:sha` dependency in deps.edn pinned to jolt-lang's own
+       main branch."
       []
       (let [home (System/getProperty "user.home")]
         (->> [(System/getenv "JOLT_DIPLOMAT_DIR")
+              "../jolt-diplomat"
+              (str home "/dev/burinc/jolt-diplomat")
               "../github--jolt-lang--jolt-diplomat"
               (str home "/dev/github--jolt-lang--jolt-diplomat")]
              (remove nil?)
@@ -83,9 +98,9 @@
   sync-bindings {:doc "copy jolt-diplomat's diplomat.runtime + json_capi's generated Clojure bindings into src/diplomat/ (dev-only; the Dockerfile does the equivalent inside the image build)"
                   :task (let [src (jolt-diplomat-dir)]
                           (if-not src
-                            (do (println "jolt-diplomat is not checked out anywhere I looked:")
-                                (println "  $JOLT_DIPLOMAT_DIR, ../github--jolt-lang--jolt-diplomat,")
-                                (println "  ~/dev/github--jolt-lang--jolt-diplomat")
+                            (do (println "jolt-diplomat (with the JSON builder API, feat/json-builder-api branch) is not checked out anywhere I looked:")
+                                (println "  $JOLT_DIPLOMAT_DIR, ../jolt-diplomat, ~/dev/burinc/jolt-diplomat (preferred, public fork),")
+                                (println "  ../github--jolt-lang--jolt-diplomat, ~/dev/github--jolt-lang--jolt-diplomat (fallback)")
                                 (System/exit 1))
                             (let [generated (fs/file src "examples" "json" "generated" "diplomat")
                                   rt-dir    (fs/file src "runtime" "src" "diplomat")
@@ -130,9 +145,9 @@
   vendor {:doc "copy the jolt-diplomat subset (json_capi/backend/runtime/bind.clj) into vendor/ for the Docker build"
           :task (let [src (jolt-diplomat-dir)]
                   (if-not src
-                    (do (println "jolt-diplomat is not checked out anywhere I looked:")
-                        (println "  $JOLT_DIPLOMAT_DIR, ../github--jolt-lang--jolt-diplomat,")
-                        (println "  ~/dev/github--jolt-lang--jolt-diplomat")
+                    (do (println "jolt-diplomat (with the JSON builder API, feat/json-builder-api branch) is not checked out anywhere I looked:")
+                        (println "  $JOLT_DIPLOMAT_DIR, ../jolt-diplomat, ~/dev/burinc/jolt-diplomat (preferred, public fork),")
+                        (println "  ../github--jolt-lang--jolt-diplomat, ~/dev/github--jolt-lang--jolt-diplomat (fallback)")
                         (System/exit 1))
                     (do (fs/delete-tree "vendor" {:force true})
                         (fs/create-dirs "vendor/jolt-diplomat")
