@@ -69,45 +69,41 @@ trusting the number.
 
 ## This repo's own baseline
 
-Measured against this repo's own binary (not the source project's), jolt
-v0.8.7, arm64, `provided.al2023`, 2026-09-12, two regions back to back:
+Measured against **this repo's own binary** (`lambda-mvp-rst`, the
+Rust-JSON-builder-via-jolt-diplomat fork, not `lambda-mvp-jlt`'s), jolt
+v0.8.7, arm64, `provided.al2023`, `AWS_PROFILE=b12n`, `ap-southeast-2`,
+**re-run and re-recorded 2026-09-12** via `bb deploy && bb bench && bb
+teardown` end to end (`dist/bootstrap`: 15,583,888 bytes / 14.86 MiB,
+`Max Memory Used` unaffected by the `libjson_capi.so`/
+`libjson_capi_shim.so` the Rust JSON builder adds):
 
-| Metric | us-west-2, 2048 MB | us-west-2, 3008 MB | ap-southeast-2, 2048 MB | ap-southeast-2, 3008 MB |
-|---|---|---|---|---|
-| Cold Init Duration | 325.3 ms | 306.5 ms | 288.3 ms | 401.9 ms |
-| Cold Duration | 2.4 ms | 2.2 ms | 2.1 ms | 3.0 ms |
-| Warm Duration (min/median/max) | 1.8 / 1.9 / 2.0 ms | 2.0 / 2.2 / 2.3 ms | 1.7 / 1.8 / 2.0 ms | 2.1 / 2.2 / 2.6 ms |
-| Max Memory Used | 164 MB | 164 MB | 164 MB | 164 MB |
+| Metric | 2048 MB | 3008 MB |
+|---|---|---|
+| Cold Init Duration | 295.4 ms | 304.8 ms |
+| Cold Duration | 2.1 ms | 2.0 ms |
+| Warm Duration (min/median/max) | 1.7 / 1.9 / 2.0 ms | 1.7 / 1.9 / 2.0 ms |
+| Max Memory Used | 168 MB | 168 MB |
 
-Same as **illustrative, not a live guarantee**: a single run each, and the
-spread between tiers and regions above (down to ~2 ms warm, Cold Init
-anywhere from ~290 to ~400 ms) is itself the point, not a precise number to
-target.
+**Illustrative, not a live guarantee**: a single `bb bench` run (one cold +
+five warm samples per tier, one region), and the numbers above are in the
+same ballpark as `lambda-mvp-jlt`'s own unmodified-JSON-string-building
+baseline — the Rust FFI call adds no measurable cold or warm overhead at
+this sample size. Re-run `bb deploy && bb bench && bb teardown` yourself
+for a number specific to your own account/region/hardware allocation.
 
-### v0.8.6 vs v0.8.7, confirmed
+### v0.8.6 vs v0.8.7, and multi-region: not yet re-run in this fork
 
-The 164 MB above is notably below the ~250 MB baseline the section below
-describes for jolt v0.8.6 and earlier, and v0.8.7's own changelog credits
-binary-size and resident-memory cuts (a hello-world example there went from
-225 MB to 95 MB resident). Confirmed against this repo's own binary, not
-just plausible: same function, same region (ap-southeast-2), same memory
-tiers, redeployed with `JOLT_VERSION=0.8.6` then `JOLT_VERSION=0.8.7`
-back to back, 2026-09-12.
-
-| Metric | 0.8.6, 2048 MB | 0.8.6, 3008 MB | 0.8.7, 2048 MB | 0.8.7, 3008 MB |
-|---|---|---|---|---|
-| Cold Init Duration | 587.5 ms | 590.3 ms | 399.1 ms | 317.9 ms |
-| Cold Duration | 1.9 ms | 2.2 ms | 2.4 ms | 2.3 ms |
-| Warm Duration (min/median/max) | 1.7 / 1.8 / 1.9 ms | 1.8 / 1.9 / 2.1 ms | 2.1 / 2.2 / 2.5 ms | 1.8 / 2.0 / 3.0 ms |
-| Max Memory Used | 317 MB | 317 MB | 164 MB | 164 MB |
-
-`dist/bootstrap` itself shrank the same way: 34.4 MB under 0.8.6 down to
-15.1 MB under 0.8.7. Max Memory Used roughly halved and Cold Init Duration
-dropped by 30-46% at both tiers, in the direction the changelog claims and
-by a margin too large to be tier-to-tier noise. Warm Duration moved the
-other way slightly, still low single-digit milliseconds either version, not
-a meaningful difference at this sample size (one warm-sample run per tier
-per version).
+The previous revision of this section carried over a `us-west-2` /
+`ap-southeast-2` comparison table and a `v0.8.6` vs `v0.8.7` rebuild
+comparison from `lambda-mvp-jlt`'s own docs, mislabeled as "this repo's
+own baseline" even though neither had actually been re-run against
+`lambda-mvp-rst`. Both have been removed pending an actual re-run in this
+fork (each requires either switching AWS regions or rebuilding the image
+twice with different `JOLT_VERSION` build-args, deploying, and
+benchmarking each — more than the scope of the single-region baseline
+above). See "What the source research project found" below for the
+inherited, clearly-attributed historical numbers from `lambda-mvp-jlt`
+instead.
 
 ## What the source research project found
 
@@ -141,8 +137,12 @@ that project's specific binary, because the binary itself grew substantially
 between the two pins (unrelated dependency growth, not jolt's own boot
 format). That's a finding specific to what was linked into that binary, not
 a general claim about the jolt version bump, which is exactly why it's
-worth reproducing against *this* repo's much smaller, dependency-free
-binary rather than taking the number on faith:
+worth reproducing against *this* repo's own (much smaller than that
+project's, though no longer dependency-free now that it links
+`libjson_capi.so`/`libjson_capi_shim.so` for the Rust JSON builder) binary
+rather than taking the number on faith. Not yet re-run against
+`lambda-mvp-rst` specifically (see the previous section) — the recipe
+below is unchanged and still applies:
 
 ```sh
 JOLT_VERSION=0.7.14 jolt image && jolt deploy && jolt bench   # note the table
