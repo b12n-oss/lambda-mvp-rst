@@ -1,6 +1,6 @@
 (ns script.aws-lifecycle
   "Generic (no hardcoded profile/account/region) create-or-update / invoke /
-  teardown for the lambda-mvp-jlt demo function, driven entirely by
+  teardown for the lambda-mvp-rst demo function, driven entirely by
   whatever the caller's aws CLI already has configured (AWS_PROFILE/
   AWS_REGION env vars, or `aws configure`). Invoked via `jolt deploy`/
   `jolt invoke`/`jolt teardown`, or directly:
@@ -11,7 +11,7 @@
             [cheshire.core :as json]
             [clojure.string :as str]))
 
-(def function-name (or (System/getenv "LAMBDA_MVP_FUNCTION_NAME") "lambda-mvp-jlt"))
+(def function-name (or (System/getenv "LAMBDA_MVP_FUNCTION_NAME") "lambda-mvp-rst"))
 (def role-name (str function-name "-role"))
 (def zip-path "dist/lambda.zip")
 (def bootstrap-path "dist/bootstrap")
@@ -23,7 +23,7 @@
 
 (defn- die! [& msg]
   (binding [*out* *err*]
-    (apply println "lambda-mvp-jlt:" msg))
+    (apply println "lambda-mvp-rst:" msg))
   (System/exit 1))
 
 (defn- bootstrap-arch
@@ -62,16 +62,16 @@
 
 (defn- ensure-role! []
   (if (role-exists?)
-    (println "lambda-mvp-jlt: role" role-name "already exists")
+    (println "lambda-mvp-rst: role" role-name "already exists")
     (do
-      (println "lambda-mvp-jlt: creating role" role-name)
+      (println "lambda-mvp-rst: creating role" role-name)
       (let [{:keys [exit err]} (sh "aws" "iam" "create-role"
                                    "--role-name" role-name
                                    "--assume-role-policy-document" trust-policy)]
         (when-not (zero? exit) (die! "create-role failed:" err)))
       ;; IAM role propagation is eventually consistent -- a create-function
       ;; immediately after create-role can fail with "role cannot be assumed".
-      (println "lambda-mvp-jlt: waiting 10s for IAM role propagation")
+      (println "lambda-mvp-rst: waiting 10s for IAM role propagation")
       (Thread/sleep 10000)))
   ;; Always (re-)attach the policy, whether the role is new or pre-existing --
   ;; attach-role-policy is itself idempotent (AWS no-ops on an
@@ -96,7 +96,7 @@
       (die! path "not found -- run `jolt image` first.")))
   (if (function-exists?)
     (do
-      (println "lambda-mvp-jlt: updating function code for" function-name (str "(" (bootstrap-arch) ")"))
+      (println "lambda-mvp-rst: updating function code for" function-name (str "(" (bootstrap-arch) ")"))
       ;; --architectures on update too: without it, a function created arm64
       ;; keeps arm64 and an x86_64 zip fails at init with Runtime.InvalidEntrypoint.
       (let [{:keys [exit err]} (sh "aws" "lambda" "update-function-code"
@@ -111,7 +111,7 @@
                                    "--timeout" "15" "--memory-size" "2048")]
         (when-not (zero? exit) (die! "update-function-configuration failed:" err))))
     (do
-      (println "lambda-mvp-jlt: creating function" function-name (str "(" (bootstrap-arch) ")"))
+      (println "lambda-mvp-rst: creating function" function-name (str "(" (bootstrap-arch) ")"))
       (let [{:keys [exit err]} (sh "aws" "lambda" "create-function"
                                    "--function-name" function-name
                                    "--runtime" "provided.al2023"
@@ -128,14 +128,14 @@
   (require-aws-identity!)
   (ensure-role!)
   (ensure-function!)
-  (println "lambda-mvp-jlt: deployed" function-name "->"
+  (println "lambda-mvp-rst: deployed" function-name "->"
            (-> (sh "aws" "lambda" "get-function" "--function-name" function-name
                    "--query" "Configuration.FunctionArn" "--output" "text")
                :out str/trim)))
 
 (defn invoke! []
   (require-aws-identity!)
-  (let [out-file (str (System/getProperty "java.io.tmpdir") "/lambda-mvp-jlt-invoke.json")
+  (let [out-file (str (System/getProperty "java.io.tmpdir") "/lambda-mvp-rst-invoke.json")
         {:keys [exit out err]}
         (sh "aws" "lambda" "invoke"
             "--function-name" function-name
@@ -146,24 +146,24 @@
             "--output" "text"
             out-file)]
     (when-not (zero? exit) (die! "invoke failed:" err))
-    (println "lambda-mvp-jlt: response body:")
+    (println "lambda-mvp-rst: response body:")
     (println (slurp out-file))
-    (println "lambda-mvp-jlt: log tail:")
+    (println "lambda-mvp-rst: log tail:")
     (println (String. (.decode (java.util.Base64/getDecoder) (str/trim out))))))
 
 (defn teardown! []
   (require-aws-identity!)
   (when (function-exists?)
-    (println "lambda-mvp-jlt: deleting function" function-name)
+    (println "lambda-mvp-rst: deleting function" function-name)
     (let [{:keys [exit err]} (sh "aws" "lambda" "delete-function" "--function-name" function-name)]
       (when-not (zero? exit) (die! "delete-function failed:" err))))
   (when (role-exists?)
-    (println "lambda-mvp-jlt: detaching + deleting role" role-name)
+    (println "lambda-mvp-rst: detaching + deleting role" role-name)
     (let [{:keys [exit err]} (sh "aws" "iam" "detach-role-policy" "--role-name" role-name "--policy-arn" policy-arn)]
       (when-not (zero? exit) (die! "detach-role-policy failed:" err)))
     (let [{:keys [exit err]} (sh "aws" "iam" "delete-role" "--role-name" role-name)]
       (when-not (zero? exit) (die! "delete-role failed:" err))))
-  (println "lambda-mvp-jlt: teardown complete"))
+  (println "lambda-mvp-rst: teardown complete"))
 
 (defn -main [& args]
   (case (first args)

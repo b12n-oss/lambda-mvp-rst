@@ -1,18 +1,70 @@
-# lambda-mvp-jlt: AWS Lambda custom runtime in Jolt
+# lambda-mvp-rst: AWS Lambda custom runtime in Jolt, with a Rust JSON builder via jolt-diplomat
 
-Run [Jolt](https://github.com/jolt-lang/jolt) (native Clojure on Chez Scheme,
-no JVM) on AWS Lambda as a **custom runtime**, the same `provided.al2023`
-contract that [awslabs/aws-lambda-cpp](https://github.com/awslabs/aws-lambda-cpp)
-implements for C++, here implemented in ~60 lines of Clojure over Jolt's
-built-in HTTP client. `joltc build` compiles the handler *and* the runtime
-loop into one self-contained native executable named `bootstrap`; the zip is
-that binary plus a `lib/` of non-glibc shared objects.
+Fork of [`lambda-mvp-jlt`](https://github.com/b12n-oss/lambda-mvp-jlt) that
+answers one question: can a Rust capability be embedded into a Jolt-run
+AWS Lambda custom runtime via [jolt-diplomat](https://github.com/jolt-lang/jolt-diplomat)
+(a [Diplomat](https://github.com/rust-diplomat/diplomat)-based FFI bridge),
+built reproducibly in a container, and deployed to real Lambda
+infrastructure? **Yes** — verified end to end, including a real
+`aws lambda invoke` round trip. See
+[the design doc](https://github.com/REDACTED-PRIVATE-REPO/blob/main/b12n-oss/lambda-mvp-rst/specs/2026-09-12-lambda-mvp-rst-feasibility-design.md)
+for the full story.
+
+Same `provided.al2023` custom-runtime contract as `lambda-mvp-jlt` (native
+Clojure on Chez Scheme via [Jolt](https://github.com/jolt-lang/jolt), no
+JVM, ~60 lines of runtime loop over Jolt's built-in HTTP client), but the
+handler builds its JSON response with real Rust (`serde_json`, via
+jolt-diplomat's generated FFI bindings) instead of hand-assembling JSON
+strings — Jolt itself has no JSON library. `joltc build` compiles the
+handler, the runtime loop, and the Diplomat-generated glue into one
+self-contained native executable named `bootstrap`; the zip is that binary
+plus a `lib/` of non-glibc shared objects, now including
+`libjson_capi.so`/`libjson_capi_shim.so`.
 
 This is a deliberately small extraction: a demo handler (greet + echo +
-warm-invocation counter) and a `jolt bench` tool for comparing cold vs. warm
-boot time across memory tiers, reproducible against **your own AWS
-account**. No function URL, no bearer auth, no public HTTP endpoint:
-everything here is `aws lambda invoke`.
+warm-invocation counter, JSON built via Rust) and a `jolt bench` tool for
+comparing cold vs. warm boot time across memory tiers, reproducible against
+**your own AWS account**. No function URL, no bearer auth, no public HTTP
+endpoint: everything here is `aws lambda invoke`.
+
+## Rust JSON builder via jolt-diplomat
+
+`src/net/b12n/lambda_mvp/json_bridge.clj` loads a small Rust crate
+(`json_capi`, vendored from jolt-diplomat's `examples/json`) that exposes a
+`serde_json::Value` builder through Diplomat-generated FFI bindings:
+`new_object`/`new_array`/`new_string`/`new_number`/`new_bool` constructors
+and `set_string`/`set_number`/`set_bool`/`set_value`/`push` mutators.
+`handler.clj` calls `json/build-response` to construct the actual response
+object (embedding the parsed event, request id, runtime string, and
+warm-invocation counter) instead of interpolating a JSON string by hand.
+
+Because jolt-diplomat's builder API is local/uncommitted upstream, this repo
+**vendors** a snapshot of it rather than depending on a git ref:
+
+- `bb vendor` copies a lean (~156KB) subset of jolt-diplomat
+  (`backend/`, `runtime/`, `examples/json/json_capi/`, `bind.clj`) into
+  `vendor/jolt-diplomat/`. It looks for a jolt-diplomat checkout via
+  `$JOLT_DIPLOMAT_DIR`, a sibling directory, or `~/dev/github--jolt-lang--jolt-diplomat`.
+- `bb sync-bindings` (local dev) runs `bind.clj` against the vendored
+  copy to produce macOS `.dylib`/generated-Clojure artifacts under
+  `src/diplomat/`, so `bb probe`/`bb repl` work without Docker.
+- The `Dockerfile`'s build stage runs the same `bind.clj` *inside*
+  AL2023, producing Linux `.so` artifacts — no cross-compilation, no
+  prebuilt binaries checked in.
+- **TODO**: once jolt-diplomat's builder API is committed/pushed
+  upstream, replace this vendoring with a proper `:git/url` pin in
+  `deps.edn`.
+
+### A note on the corporate proxy build-arg
+
+If your Docker network intercepts TLS (e.g. a corporate Zscaler proxy),
+`cargo install diplomat-tool` inside the build stage will fail to reach
+crates.io unless the intercepting CA is trusted at the OS level. The
+`Dockerfile` accepts an `IMPORT_CA_CERT` build-arg (default `true`) that
+imports `docker/zscaler-ca.pem` via `update-ca-trust` before any HTTPS
+step; pass `--build-arg IMPORT_CA_CERT=false` (or set it via `bb image`'s
+env, mirroring `lambda-mvp-jlt`'s/`REDACTED-PRIVATE-REPO`'s conventions) to
+skip it on a network that doesn't need it.
 
 ## Status
 
@@ -85,8 +137,8 @@ jolt teardown     # delete the function + role when you're done
 `jolt image` builds for arm64 unless `LAMBDA_ARCH=x86_64` (or `amd64`) is set.
 Use that on an x86_64 Linux host without qemu, where an arm64 build fails with
 `exec format error`. `jolt deploy` picks up the architecture from the built
-binary. `jolt deploy`'s IAM role (`lambda-mvp-jlt-role`) and function
-(`lambda-mvp-jlt`) names are overridable via `LAMBDA_MVP_FUNCTION_NAME`.
+binary. `jolt deploy`'s IAM role (`lambda-mvp-rst-role`) and function
+(`lambda-mvp-rst`) names are overridable via `LAMBDA_MVP_FUNCTION_NAME`.
 `jolt bench`'s memory tiers and warm-sample count are overridable via
 `BENCH_MEMORY_TIERS` (default `2048,3008`) and `BENCH_WARM_SAMPLES`
 (default `5`).

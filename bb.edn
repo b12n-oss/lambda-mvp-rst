@@ -60,7 +60,7 @@
              first))))
 
   info {:doc "task cheat-sheet"
-        :task (do (println "lambda-mvp-jlt -- a shareable AWS Lambda custom runtime in jolt")
+        :task (do (println "lambda-mvp-rst -- a shareable AWS Lambda custom runtime in jolt")
                   (println "")
                   (println "  jolt probe       offline e2e: mock Runtime API + jolt loop (no AWS, no Docker)")
                   (println "  jolt demo        image + deploy + invoke in one go, prerequisites checked first")
@@ -153,10 +153,11 @@
                               (fs/copy from to))))
                         (println "vendor/jolt-diplomat <-" src))))}
 
-  image {:doc "build bootstrap + lambda.zip in an amazonlinux:2023 container (LAMBDA_ARCH, default arm64)"
+  image {:doc "build bootstrap + lambda.zip in an amazonlinux:2023 container (LAMBDA_ARCH, default arm64; IMPORT_CA_CERT=false to skip the ZScaler CA import)"
          :task (let [jolt-version (System/getenv "JOLT_VERSION")
                      chez-version (System/getenv "CHEZ_VERSION")
                      base (System/getenv "BASE_IMAGE")
+                     import-ca (System/getenv "IMPORT_CA_CERT")
                      ;; Lambda spells it x86_64, Docker amd64 -- accept both.
                      arch (or (System/getenv "LAMBDA_ARCH") "arm64")
                      platform (case arch
@@ -170,6 +171,7 @@
                                (if jolt-version (str "--build-arg JOLT_VERSION=" jolt-version " ") "")
                                (if chez-version (str "--build-arg CHEZ_VERSION=" chez-version " ") "")
                                (if base (str "--build-arg BASE_IMAGE=" base " ") "")
+                               (if import-ca (str "--build-arg IMPORT_CA_CERT=" import-ca " ") "")
                                ".")))}
 
   demo {:doc "image + deploy + invoke in one go, checking every prerequisite before starting"

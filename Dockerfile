@@ -21,9 +21,24 @@ FROM ${BASE_IMAGE} AS build
 ARG JOLT_VERSION=0.8.7
 ARG CHEZ_VERSION=10.4.1
 
+# Corporate proxy (ZScaler): trusted at the OS level (update-ca-trust) so
+# dnf, curl, git, and cargo -- everything below except the JVM, which this
+# project has none of -- all validate through it. See
+# docker/zscaler-ca.pem and REDACTED-PRIVATE-REPO's Dockerfile for the same
+# pattern (there imported into the JVM truststore instead, since Java
+# doesn't use OS certs). Skippable on a non-intercepted network: --build-arg
+# IMPORT_CA_CERT=false.
+ARG IMPORT_CA_CERT=true
+COPY docker/zscaler-ca.pem /tmp/zscaler-ca.pem
+RUN dnf install -y ca-certificates && dnf clean all \
+    && if [ "$IMPORT_CA_CERT" = "true" ]; then \
+         cp /tmp/zscaler-ca.pem /etc/pki/ca-trust/source/anchors/zscaler-ca.pem \
+         && update-ca-trust; \
+       fi \
+    && rm -f /tmp/zscaler-ca.pem
+
 RUN dnf install -y gcc gcc-c++ make git zip tar gzip findutils \
-      ncurses-devel libuuid-devel zlib-devel lz4-devel openssl-libs ca-certificates \
-    && update-ca-trust \
+      ncurses-devel libuuid-devel zlib-devel lz4-devel openssl-libs \
     && dnf clean all
 
 # Chez Scheme from source: the distro-package route ships no kernel dev files
@@ -52,12 +67,14 @@ RUN dnf install -y which vim-common && dnf clean all
 # Rust + diplomat-tool: builds json_capi (jolt-diplomat's serde_json-over-
 # Diplomat bridge, extended by this project with a JSON builder API -- see
 # json-bridge.clj) for THIS container's OS/glibc, same reasoning as the
-# from-source Chez/jolt builds above. rustup (not dnf's rust package) keeps
-# this reproducible across AL2023 releases regardless of what version that
-# repo happens to ship.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-ENV PATH=/root/.cargo/bin:$PATH
+# from-source Chez/jolt builds above. AL2023's own `rust`/`cargo` packages
+# (not rustup) -- one dnf transaction, no extra HTTPS egress to
+# static.rust-lang.org through a network that may intercept/mis-verify TLS
+# for hosts outside the distro's own mirrors (rustup.rs hit exactly that in
+# this environment).
+RUN dnf install -y rust cargo && dnf clean all
 RUN cargo install diplomat-tool --version "^0.15"
+ENV PATH=/root/.cargo/bin:$PATH
 
 # WORKDIR is /var/task, matching a deployed custom-runtime zip's own cwd on
 # Lambda -- not an arbitrary build-only name.

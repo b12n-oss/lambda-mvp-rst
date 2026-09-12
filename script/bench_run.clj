@@ -10,7 +10,7 @@
          '[cheshire.core :as json]
          '[clojure.string :as str])
 
-(def function-name (or (System/getenv "LAMBDA_MVP_FUNCTION_NAME") "lambda-mvp-jlt"))
+(def function-name (or (System/getenv "LAMBDA_MVP_FUNCTION_NAME") "lambda-mvp-rst"))
 
 (def memory-tiers
   (mapv #(Integer/parseInt (str/trim %))
@@ -24,7 +24,7 @@
     {:exit exit :out out :err err}))
 
 (defn- die! [& msg]
-  (binding [*out* *err*] (apply println "lambda-mvp-jlt:" msg))
+  (binding [*out* *err*] (apply println "lambda-mvp-rst:" msg))
   (System/exit 1))
 
 (defn- require-aws-identity!
@@ -47,7 +47,7 @@
 
 (defn- invoke-sample! []
   (let [out-file (str (System/getProperty "java.io.tmpdir")
-                      "/lambda-mvp-jlt-bench-" (System/nanoTime) ".json")
+                      "/lambda-mvp-rst-bench-" (System/nanoTime) ".json")
         {:keys [exit out err]}
         (sh "aws" "lambda" "invoke"
             "--function-name" function-name
@@ -66,13 +66,13 @@
        (String. (.decode (java.util.Base64/getDecoder) (:LogResult response)))))))
 
 (defn- bench-tier [tier]
-  (println "lambda-mvp-jlt: benchmarking" tier "MB...")
+  (println "lambda-mvp-rst: benchmarking" tier "MB...")
   (set-memory! tier)
   (let [cold (invoke-sample!)]
     (when-not cold
       (die! "no REPORT line parsed for the" tier "MB cold sample"))
     (when-not (:init-duration-ms cold)
-      (println "lambda-mvp-jlt: WARNING -- cold sample for" tier
+      (println "lambda-mvp-rst: WARNING -- cold sample for" tier
                "MB has no Init Duration; the execution environment may not"
                "have been fresh (see docs/guide/cold-warm-boot.md)"))
     (let [warm (mapv (fn [_] (invoke-sample!)) (range warm-samples))]
@@ -80,7 +80,7 @@
         (die! "a warm sample for" tier "MB produced no parseable REPORT line"
               "(likely a transient invoke or log-delivery issue) -- rerun jolt bench"))
       (when (some :init-duration-ms warm)
-        (println "lambda-mvp-jlt: WARNING -- a 'warm' sample for" tier
+        (println "lambda-mvp-rst: WARNING -- a 'warm' sample for" tier
                  "MB unexpectedly showed Init Duration; the execution"
                  "environment may have been recycled mid-run (see"
                  "docs/guide/cold-warm-boot.md)"))

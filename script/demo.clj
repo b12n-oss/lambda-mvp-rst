@@ -17,7 +17,7 @@
     {:exit exit :out out :err err}))
 
 (defn- die! [& msg]
-  (binding [*out* *err*] (apply println "lambda-mvp-jlt:" msg))
+  (binding [*out* *err*] (apply println "lambda-mvp-rst:" msg))
   (System/exit 1))
 
 (defn- require-tools! []
@@ -38,7 +38,7 @@
               "Run `aws configure` (or `aws configure sso`), or set AWS_PROFILE, then retry.\n"
               (str/trim (or err ""))))
       (let [{:strs [Account Arn]} (json/parse-string out)]
-        (println "lambda-mvp-jlt: will deploy to account" Account "in" region "as" Arn)))))
+        (println "lambda-mvp-rst: will deploy to account" Account "in" region "as" Arn)))))
 
 (defn- require-docker! []
   (let [{:keys [exit err]} (sh "docker" "info")]
@@ -58,7 +58,7 @@
                    ("x86_64" "amd64") "linux/amd64"
                    (die! "LAMBDA_ARCH must be arm64 or x86_64, got" arch))
         native (case (System/getProperty "os.arch") "amd64" "x86_64" "aarch64" "arm64" nil)]
-    (println "lambda-mvp-jlt: checking Docker can run" platform "containers (pulls the base image the first time)")
+    (println "lambda-mvp-rst: checking Docker can run" platform "containers (pulls the base image the first time)")
     (let [{:keys [exit err]} (sh "docker" "run" "--rm" "--platform" platform base-image "true")]
       (when-not (zero? exit)
         (if (str/includes? err "exec format error")
@@ -68,7 +68,7 @@
           (die! "could not run" base-image "for" (str platform ":\n") (str/trim err)))))))
 
 (defn- step! [task]
-  (println (str "\nlambda-mvp-jlt: == " task " =="))
+  (println (str "\nlambda-mvp-rst: == " task " =="))
   (when-not (zero? (:exit (p/shell {:continue true} "bb" task)))
     (die! task "failed; stopping.")))
 
@@ -77,4 +77,4 @@
 (require-docker!)
 (require-platform!)
 (run! step! ["image" "deploy" "invoke"])
-(println "\nlambda-mvp-jlt: done. `jolt invoke` calls it again; `jolt teardown` deletes the function and role.")
+(println "\nlambda-mvp-rst: done. `jolt invoke` calls it again; `jolt teardown` deletes the function and role.")
