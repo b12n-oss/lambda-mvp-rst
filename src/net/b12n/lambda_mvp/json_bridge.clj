@@ -52,34 +52,7 @@
         (integer? v) (jv/set-number resp (name k) (double v))
         (boolean? v) (jv/set-bool resp (name k) (if v 1 0))
         :else (throw (ex-info "json-bridge/build-response: unsupported field value type"
-                               {:key k :value v}))))
-    (if (seq event-json)
-      (dr/with-opaque [event (jv/parse event-json)]
-        (jv/set-value resp "event" event)
-        (String. (jv/to-string resp)))
-      (do
-        (jv/set-bool resp "event_present" 0)
-        (String. (jv/to-string resp))))))
-
-
-(defn build-response
-  "event-json: the raw incoming event (string, may be empty/invalid).
-  fields: a map of extra scalar key -> value to add (string/double/boolean
-  Clojure values). Returns the serialized response JSON as a String.
-
-  The incoming event is parsed (not just spliced in) so a malformed event
-  is a real, typed error here rather than being silently forwarded --
-  something the previous hand-interpolated approach could not detect."
-  [event-json fields]
-  (dr/with-opaque [resp (jv/new-object)]
-    (doseq [[k v] fields]
-      (cond
-        (string? v) (jv/set-string resp (name k) v)
-        (float? v) (jv/set-number resp (name k) (double v))
-        (integer? v) (jv/set-number resp (name k) (double v))
-        (boolean? v) (jv/set-bool resp (name k) (if v 1 0))
-        :else (throw (ex-info "json-bridge/build-response: unsupported field value type"
-                               {:key k :value v}))))
+                              {:key k :value v}))))
     (if (seq event-json)
       (dr/with-opaque [event (jv/parse event-json)]
         (jv/set-value resp "event" event)
