@@ -9,17 +9,14 @@ name: Site
 # The engine is pinned to a tag rather than tracking its main branch, so a
 # change over there cannot break these docs without someone choosing it.
 #
-# This repo is public: builds run on every push to main and every pull
-# request, plus on-demand via workflow_dispatch.
+# This repo is still private: it pays for every Actions run, so this only
+# builds on-demand (workflow_dispatch) for now. Restore push/pull_request
+# triggers once the repo goes public.
 #
-# The deploy job is gated on the PUBLISH_SITE repository variable (set to
-# "true") and GitHub Pages being enabled on this repo. Both are true as of
-# 2026-09-11.
+# The deploy job is gated on the PUBLISH_SITE repository variable and
+# GitHub Pages being enabled on this repo. Neither is set yet.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -36,7 +33,7 @@ env:
   # v0.3.2 fixes `jolt run build`/`clean` (docs-engine#3), which is what
   # lets this workflow use jolt instead of babashka below.
   DOCS_ENGINE_REF: v0.3.2
-  BASE_PATH: /lambda-mvp-jlt
+  BASE_PATH: /lambda-mvp-rst
 
 jobs:
   build:
@@ -79,7 +76,7 @@ jobs:
             || { echo "mermaid.min.js is missing from the architecture page"; exit 1; }
 
           # The failure mode this site's base path exists to prevent. Served at
-          # b12n-oss.github.io/lambda-mvp-jlt/, a root-absolute URL loads the
+          # b12n-oss.github.io/lambda-mvp-rst/, a root-absolute URL loads the
           # ORGANIZATION site's asset instead of this project's. The page still
           # renders, wearing the wrong clothes, so nothing but a check catches it.
           if grep -ohE '(href|src)="/[^"]*"' "$out"/index.html "$out"/404.html "$out"/guide/*.html \

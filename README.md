@@ -6,9 +6,7 @@ AWS Lambda custom runtime via [jolt-diplomat](https://github.com/jolt-lang/jolt-
 (a [Diplomat](https://github.com/rust-diplomat/diplomat)-based FFI bridge),
 built reproducibly in a container, and deployed to real Lambda
 infrastructure? **Yes** — verified end to end, including a real
-`aws lambda invoke` round trip. See
-[the design doc](https://github.com/REDACTED-PRIVATE-REPO/blob/main/b12n-oss/lambda-mvp-rst/specs/2026-09-12-lambda-mvp-rst-feasibility-design.md)
-for the full story.
+`aws lambda invoke` round trip.
 
 Same `provided.al2023` custom-runtime contract as `lambda-mvp-jlt` (native
 Clojure on Chez Scheme via [Jolt](https://github.com/jolt-lang/jolt), no
@@ -63,8 +61,8 @@ crates.io unless the intercepting CA is trusted at the OS level. The
 `Dockerfile` accepts an `IMPORT_CA_CERT` build-arg (default `true`) that
 imports `docker/zscaler-ca.pem` via `update-ca-trust` before any HTTPS
 step; pass `--build-arg IMPORT_CA_CERT=false` (or set it via `bb image`'s
-env, mirroring `lambda-mvp-jlt`'s/`REDACTED-PRIVATE-REPO`'s conventions) to
-skip it on a network that doesn't need it.
+env, mirroring `lambda-mvp-jlt`'s convention) to skip it on a network
+that doesn't need it.
 
 ## Status
 

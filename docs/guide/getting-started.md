@@ -19,12 +19,14 @@
 ## Clone and probe
 
 ```sh
-git clone git@github.com:b12n-oss/lambda-mvp-jlt.git
-cd lambda-mvp-jlt
+git clone git@github.com:b12n-oss/lambda-mvp-rst.git
+cd lambda-mvp-rst
 jolt probe
 ```
 
 `jolt probe` runs the actual runtime loop (`joltc run`, interpreted, not the compiled `bootstrap`) against an offline mock of the Lambda Runtime API on an OS-assigned local port. No AWS account, no Docker, and it finishes in about two seconds. If this doesn't pass, nothing later in this page will either: it's the fastest signal that something about your `joltc` install or the runtime loop itself is wrong before you spend five minutes on a Docker build.
+
+The handler builds its JSON response via a vendored Rust crate (see [The Rust JSON builder via jolt-diplomat](json-builder.md)), so the first `jolt probe` also runs `bb sync-bindings`, which needs a jolt-diplomat checkout to compile against ($JOLT_DIPLOMAT_DIR, a sibling directory, or the default search path `bb sync-bindings` prints if it can't find one). `jolt image`'s Docker build has the same requirement one step removed: `bb vendor` copies a subset of that same checkout into `vendor/jolt-diplomat/` (gitignored, not checked in) before the build runs `bind.clj` against it inside the container.
 
 Run the unit suite the same way:
 

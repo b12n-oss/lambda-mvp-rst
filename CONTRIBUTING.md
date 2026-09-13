@@ -1,4 +1,4 @@
-# Contributing to lambda-mvp-jlt
+# Contributing to lambda-mvp-rst
 
 Issues and pull requests are welcome. This is the short version of what a
 change needs to pass. The longer, narrative version lives at

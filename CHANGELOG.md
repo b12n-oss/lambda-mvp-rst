@@ -12,7 +12,7 @@ All notable changes to this project are documented here.
 
 ## [0.1.0]
 
-- Extracted the custom-runtime core (Runtime API loop, demo handler, offline probe) from the private `REDACTED-PRIVATE-REPO` project, generalized: no hardcoded AWS profile, account, or region anywhere.
+- Extracted the custom-runtime core (Runtime API loop, demo handler, offline probe) from an earlier private prototype, generalized: no hardcoded AWS profile, account, or region anywhere.
 - AL2023 Docker build (`jolt image`): Chez Scheme and jolt from source, `arm64`-pinned, with `JOLT_VERSION`/`CHEZ_VERSION` as overridable build args.
 - Generic, idempotent AWS lifecycle tool (`jolt deploy`/`jolt invoke`/`jolt teardown`), driven entirely by the caller's own `aws` CLI configuration.
 - `jolt bench`: the centerpiece. Measures and compares cold-vs-warm Lambda boot time across memory tiers, with a `FunctionError`-aware invoke path so a crashing function never silently reports bogus timing data.
