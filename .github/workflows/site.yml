@@ -9,14 +9,17 @@ name: Site
 # The engine is pinned to a tag rather than tracking its main branch, so a
 # change over there cannot break these docs without someone choosing it.
 #
-# This repo is still private: it pays for every Actions run, so this only
-# builds on-demand (workflow_dispatch) for now. Restore push/pull_request
-# triggers once the repo goes public.
+# This repo is public: builds run on every push to main and every pull
+# request, plus on-demand via workflow_dispatch.
 #
-# The deploy job is gated on the PUBLISH_SITE repository variable and
-# GitHub Pages being enabled on this repo. Neither is set yet.
+# The deploy job is gated on the PUBLISH_SITE repository variable (set to
+# "true") and GitHub Pages being enabled on this repo. Both are true as of
+# 2026-09-13.
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
