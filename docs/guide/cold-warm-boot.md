@@ -105,6 +105,51 @@ above). See "What the source research project found" below for the
 inherited, clearly-attributed historical numbers from `lambda-mvp-jlt`
 instead.
 
+That gap is now partly closed. A `v0.8.7` vs `v0.8.9` comparison **has** been
+run against this fork's own binary, and it is the next section. Multi-region
+and `v0.8.6` remain un-rerun here.
+
+### v0.8.7 vs v0.8.9, three runs each
+
+jolt v0.8.9 landed on 2026-09-18. Measured against this fork's own binary,
+same function, same region (`ap-southeast-2`), `AWS_PROFILE=b12n`, redeployed
+with `JOLT_VERSION=0.8.7` then `JOLT_VERSION=0.8.9` back to back on
+2026-09-19. Cold Init is noisy enough that one sample per tier says very
+little, so each cell below is the median of **three** `bb bench` runs per
+version per tier:
+
+| Metric | 0.8.7, 2048 MB | 0.8.9, 2048 MB | 0.8.7, 3008 MB | 0.8.9, 3008 MB |
+|---|---|---|---|---|
+| Cold Init Duration (median of 3) | 445.6 ms | 470.7 ms | 320.1 ms | 365.0 ms |
+| Cold Init Duration (range of 3) | 301-451 ms | 376-471 ms | 302-456 ms | 361-486 ms |
+| Cold Duration (median of 3) | 2.5 ms | 2.3 ms | 2.1 ms | 2.3 ms |
+| Warm Duration (median of the 3 medians) | 2.1 ms | 1.9 ms | 2.0 ms | 1.8 ms |
+| Max Memory Used | 168 MB | 187 MB | 168 MB | 187 MB |
+
+**Warm Duration improved at both tiers**, 2.1 down to 1.9 ms and 2.0 down to
+1.8 ms. That is the one movement here that points the same way in every run.
+
+**Cold Duration is a wash in this fork.** It reads better at 2048 MB and worse
+at 3008 MB, and the full sample sets overlap almost completely (0.8.7 spans
+1.9-2.9 ms, 0.8.9 spans 2.0-3.2 ms). The `lambda-mvp-jlt` sibling, whose
+binary has no Rust FFI in it, did see a clean Cold Duration win over the same
+version bump, so the honest reading is that this fork's extra
+`libjson_capi.so` work sits in the same few milliseconds and blurs it.
+
+**Cold Init supports no claim either way.** Both medians moved up, both ranges
+are wide, and they overlap.
+
+**Max Memory Used rose from 168 MB to 187 MB**, about 11%, rock steady across
+all six runs. `dist/bootstrap` grew with it, 15,577,392 bytes under 0.8.7 to
+17,405,184 under 0.8.9, about 12%. The sibling saw the same roughly 11% memory
+rise on a binary without the Rust builder, so this is jolt's own change rather
+than anything `jolt-diplomat` contributes.
+
+Worth recording for anyone tracking the vendored fork: the
+`burinc/jolt-diplomat` `feat/json-builder-api` branch **builds clean against
+jolt v0.8.9** with no source changes, and `libjson_capi.so` /
+`libjson_capi_shim.so` land in `lib/` exactly as before.
+
 ## What the source research project found
 
 Measured in the private project this repo was extracted from (`us-east-1`,
@@ -113,7 +158,7 @@ guarantee**; your numbers will differ by account, region, and the hardware
 allocation AWS happens to give you). They were measured against that project's
 then-current jolt v0.7.14 pin, before the v0.8.5 heap ceiling existed, so the
 256 and 512 MB tiers shown below are not reproducible against this repo's own
-jolt v0.8.7 default, for the reason the heap-ceiling note above describes:
+jolt v0.8.9 default, for the reason the heap-ceiling note above describes:
 
 | Metric | 256 MB | 512 MB |
 |---|---|---|
@@ -146,7 +191,7 @@ below is unchanged and still applies:
 
 ```sh
 JOLT_VERSION=0.7.14 jolt image && jolt deploy && jolt bench   # note the table
-JOLT_VERSION=0.8.7  jolt image && jolt deploy && jolt bench   # compare
+JOLT_VERSION=0.8.9  jolt image && jolt deploy && jolt bench   # compare
 jolt teardown
 ```
 

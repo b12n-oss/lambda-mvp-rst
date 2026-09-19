@@ -36,8 +36,10 @@ and `set_string`/`set_number`/`set_bool`/`set_value`/`push` mutators.
 object (embedding the parsed event, request id, runtime string, and
 warm-invocation counter) instead of interpolating a JSON string by hand.
 
-Because jolt-diplomat's builder API is local/uncommitted upstream, this repo
-**vendors** a snapshot of it rather than depending on a git ref:
+The builder API has since landed upstream: `jolt-lang/jolt-diplomat` merged
+it from `burinc:feat/json-builder-api` on 2026-09-14. This repo still
+**vendors** a snapshot rather than depending on a git ref, which is now a
+choice to revisit rather than a necessity:
 
 - `bb vendor` copies a lean (~156KB) subset of jolt-diplomat
   (`backend/`, `runtime/`, `examples/json/json_capi/`, `bind.clj`) into
@@ -49,9 +51,9 @@ Because jolt-diplomat's builder API is local/uncommitted upstream, this repo
 - The `Dockerfile`'s build stage runs the same `bind.clj` *inside*
   AL2023, producing Linux `.so` artifacts — no cross-compilation, no
   prebuilt binaries checked in.
-- **TODO**: once jolt-diplomat's builder API is committed/pushed
-  upstream, replace this vendoring with a proper `:git/url` pin in
-  `deps.edn`.
+- **TODO**: the upstream merge landed on 2026-09-14, so the blocker for
+  replacing this vendoring with a proper `:git/url` pin in `deps.edn` is
+  gone. Still to do.
 
 ### A note on the corporate proxy build-arg
 
@@ -174,7 +176,7 @@ unset for that one command:
 
 ```sh
 env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy \
-  bash install --dir /usr/local/bin --version 0.8.7   # run from a jolt checkout
+  bash install --dir /usr/local/bin --version 0.8.9   # run from a jolt checkout
 ```
 
 ## Extension points
