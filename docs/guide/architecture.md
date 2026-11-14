@@ -1,6 +1,6 @@
 # Architecture
 
-This page is the whole-system view: how the runtime loop, the Rust JSON builder, the Docker build, and the two babashka-driven tools (AWS lifecycle, bench) fit together. Each piece has its own deep-dive page linked from here; this page is the map, not the territory.
+This page is the whole-system view: how the runtime loop, the Rust JSON builder, the Docker build, and the two babashka-driven tools (AWS lifecycle, bench) fit together. Each piece has its own page, linked below.
 
 ## The whole flow
 
@@ -50,15 +50,15 @@ flowchart TD
 
 ## The Runtime API loop
 
-`src/net/b12n/lambda_mvp/{runtime,handler,main}.clj` is the whole custom runtime: a poll/execute/respond loop against the Lambda Runtime API, a demo handler, and the `-main` entry point `joltc build` compiles. It's generic: `runtime/run` takes any `(fn [event-json ctx]) -> json-string`, so swapping in your own handler means writing one new namespace and pointing `main.clj` at it.
+`src/net/b12n/lambda_mvp/{runtime,handler,main}.clj` is the whole custom runtime: a poll/execute/respond loop against the Lambda Runtime API, a demo handler, and the `-main` entry point `joltc build` compiles. It's generic: `runtime/run` takes any `(fn [event-json ctx]) -> json-string`, so to use your own handler, write one new namespace and point `main.clj` at it.
 
-See [The Runtime API loop](runtime-api-loop.md) for the full contract, the design notes behind `:throw-exceptions false`, and how `tools/mock_runtime_api.py` makes runtime-loop changes a two-second local iteration via `jolt probe`.
+See [The Runtime API loop](runtime-api-loop.md) for the full contract, the design notes behind `:throw-exceptions false`, and how `tools/mock_runtime_api.py` gives `jolt probe` a two-second local iteration on runtime-loop changes.
 
 ## The Rust JSON builder
 
-`handler.clj` doesn't build its response by hand-interpolating a JSON string, the way `lambda-mvp-jlt`'s does. It calls `json_bridge.clj`, which loads a small Rust crate (`json_capi`, vendored from jolt-diplomat's `examples/json`) that wraps `serde_json::Value` behind Diplomat-generated FFI bindings. The same crate is built two ways: `bb sync-bindings` produces a macOS `.dylib` for local dev (`jolt probe`, a REPL), and the `Dockerfile`'s build stage runs the same `bind.clj` inside the AL2023 container to produce the Linux `.so` that ships in `lambda.zip`.
+Unlike `lambda-mvp-jlt`'s, `handler.clj` doesn't hand-interpolate a JSON string. It calls `json_bridge.clj`, which loads a small Rust crate (`json_capi`, vendored from jolt-diplomat's `examples/json`) that wraps `serde_json::Value` behind Diplomat-generated FFI bindings. The same crate is built two ways: `bb sync-bindings` produces a macOS `.dylib` for local dev (`jolt probe`, a REPL), and the `Dockerfile`'s build stage runs the same `bind.clj` inside the AL2023 container to produce the Linux `.so` that ships in `lambda.zip`.
 
-See [The Rust JSON builder via jolt-diplomat](json-builder.md) for why this exists, what jolt-diplomat actually generates, and the vendoring workflow in full.
+See [The Rust JSON builder via jolt-diplomat](json-builder.md) for why this exists, what jolt-diplomat generates, and the vendoring workflow.
 
 ## The build
 
@@ -68,27 +68,27 @@ See [Building on Amazon Linux 2023](al2023-build.md) for the glibc constraint in
 
 ## The AWS lifecycle tool
 
-`script/aws_lifecycle.clj` is a small, generic (no hardcoded profile, account, or region) idempotent create-or-update-or-delete tool, driven entirely by whatever the caller's own `aws` CLI already has configured. `deploy!` creates the IAM role and Lambda function on first run and updates them on every later run; `invoke!` runs a single ad-hoc invocation; `teardown!` deletes both. `jolt deploy`/`jolt invoke`/`jolt teardown` are thin wrappers around it.
+`script/aws_lifecycle.clj` is a small, generic (no hardcoded profile, account, or region) idempotent create-or-update-or-delete tool, driven entirely by the caller's own `aws` CLI configuration. `deploy!` creates the IAM role and Lambda function on first run and updates them on every later run; `invoke!` runs a single ad-hoc invocation; `teardown!` deletes both. `jolt deploy`/`jolt invoke`/`jolt teardown` are thin wrappers around it.
 
 `deploy!` never reads `LAMBDA_ARCH` itself. It reads the architecture out of the ELF header of the `dist/bootstrap` `jolt image` last built and passes `--architectures` on both create and update, so a deploy always matches the binary on disk and can flip an existing function's architecture on a later run.
 
-Every mutating AWS call checks its own exit code and fails loudly with the AWS CLI's own error text rather than reporting success on a call that actually failed. That discipline came from live testing during this project's own development: an early version silently reported a successful teardown even when a delete call had failed.
+Every mutating AWS call checks its own exit code and fails loudly with the AWS CLI's own error text. That came from live testing during this project's development: an early version reported a successful teardown even when a delete call had failed.
 
 ## `jolt demo`: the same flow, one command
 
-`jolt demo` (`script/demo.clj`) runs `image`, `deploy` and `invoke` in order, after checking tools on PATH, AWS credentials and region, Docker daemon access, and that Docker can actually run containers for the target `LAMBDA_ARCH`. It's the same pieces described above, just sequenced with every failure mode checked up front instead of surfacing mid-build.
+`jolt demo` (`script/demo.clj`) runs `image`, `deploy` and `invoke` in order, after checking tools on PATH, AWS credentials and region, Docker daemon access, and that Docker can actually run containers for the target `LAMBDA_ARCH`. It sequences the same pieces, with every failure mode checked up front instead of surfacing mid-build.
 
 ## The bench tool
 
-`script/bench.clj` holds the pure logic: `parse-report-line` turns a CloudWatch `REPORT` line into a Clojure map, and `format-table` renders a comparison across memory tiers as markdown. Neither function does any I/O, which is what makes them unit-testable via `jolt test` with no AWS account involved.
+`script/bench.clj` holds the pure logic: `parse-report-line` turns a CloudWatch `REPORT` line into a Clojure map, and `format-table` renders a comparison across memory tiers as markdown. Neither function does any I/O, so `jolt test` can unit-test them with no AWS account.
 
 `script/bench_run.clj` is the orchestration: for each memory tier, it changes the function's configured memory (which forces a fresh execution environment on the next invoke), measures one cold sample and several warm ones, and calls `format-table` on the results. It also checks the AWS response's `FunctionError` field before trusting anything else in it, since `aws lambda invoke` returns a successful exit code even when the function itself crashes.
 
-See [Cold vs. warm boot](cold-warm-boot.md) for what the resulting table means, and the recipe for reproducing a jolt-version comparison against your own account.
+See [Cold vs. warm boot](cold-warm-boot.md) for what the table means and how to reproduce a jolt-version comparison on your own account.
 
 ## Why `load-file`, not `:require`, between the two bench files
 
-`script/bench_run.clj` loads `script/bench.clj` via `(load-file "script/bench.clj")` rather than a normal `:require`. This isn't a style choice: a `script/`-relative namespace doesn't resolve reliably across every way this project's babashka tasks invoke a script (a `bb.edn` task's own classpath, and a direct `bb script/foo.clj` run), so `load-file` as its own top-level form, followed by fully-qualified calls, is the pattern verified to work in both. The same constraint is why `script/aws_lifecycle.clj` and `script/bench_run.clj` each carry their own small `sh`/`die!` helper rather than sharing one: a third shared-helper file would need the same `load-file` chain to reach either of them.
+`script/bench_run.clj` loads `script/bench.clj` via `(load-file "script/bench.clj")` rather than a normal `:require`. A `script/`-relative namespace doesn't resolve reliably across every way this project's babashka tasks invoke a script (a `bb.edn` task's own classpath, and a direct `bb script/foo.clj` run). `load-file` as its own top-level form, followed by fully-qualified calls, is the pattern verified to work in both. The same constraint is why `script/aws_lifecycle.clj` and `script/bench_run.clj` each carry their own small `sh`/`die!` helper: a shared helper file would need the same `load-file` chain to reach either of them.
 
 ## See also
 

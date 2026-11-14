@@ -11,16 +11,16 @@ Two facts collide:
 
 glibc is backward-compatible only: a binary built against an older glibc runs on
 a newer one, never the reverse. So neither the Homebrew joltc (macOS) nor the
-release Linux joltc can produce a deployable binary. The `bootstrap` must be
-built by a **from-source jolt running on AL2023 itself**, so it links 2.34.
+release Linux joltc can produce a deployable binary. A **from-source jolt
+running on AL2023 itself** has to build the `bootstrap`, so that it links 2.34.
 
 ## The recipe (Dockerfile)
 
-Mirrors jolt's own CI (`.github/workflows/tests.yml`) transplanted to dnf:
+Mirrors jolt's own CI (`.github/workflows/tests.yml`), ported to dnf:
 
 1. **Chez Scheme from source** (`CHEZ_VERSION` build arg, default `10.4.1`),
-   `./configure --installprefix=/opt/chez --threads --disable-x11`. From
-   source because distro chez packages ship no **kernel dev files**
+   `./configure --installprefix=/opt/chez --threads --disable-x11`. It builds
+   from source because distro chez packages ship no **kernel dev files**
    (`libkernel.a`, `scheme.h`), which `joltc build` needs to link the
    self-contained executable. A `chez` wrapper execing `/opt/chez/bin/scheme`
    goes next to `scheme` so jolt's build derives the kernel-file location
@@ -30,7 +30,7 @@ Mirrors jolt's own CI (`.github/workflows/tests.yml`) transplanted to dnf:
    no build step.
 3. `joltc build -m net.b12n.lambda-mvp.main -o bootstrap`: fetches the
    `deps.edn` git deps, compiles app + runtime + stdlib, links one executable.
-4. **`ldd` audit → `lib/`**: every non-glibc `.so` the binary links is copied
+4. **`ldd` audit into `lib/`**: every non-glibc `.so` the binary links is copied
    into `lib/`, plus the http-client's dlopened trio (`libz.so.1`,
    `libssl.so.3`, `libcrypto.so.3`) which `ldd` cannot see. Lambda's
    `LD_LIBRARY_PATH` includes `/var/task/lib`, so the zip is self-sufficient.
@@ -45,18 +45,17 @@ short.
 ## `JOLT_VERSION`/`CHEZ_VERSION` are build args, not constants
 
 Both are overridable: `JOLT_VERSION=0.7.14 jolt image` rebuilds against an
-older jolt release without editing the Dockerfile. This is what makes
-`docs/guide/cold-warm-boot.md`'s jolt-version comparison reproducible rather
-than a one-time historical claim.
+older jolt release without editing the Dockerfile. That makes
+`docs/guide/cold-warm-boot.md`'s jolt-version comparison reproducible.
 
 ## AL2023 packaging gotchas (each cost one build round in the source project)
 
-- **`which` is not installed.** `bin/joltc` locates chez via `which` → install
-  the `which` package.
+- **`which` is not installed.** `bin/joltc` locates chez via `which`, so
+  install the `which` package.
 - **`xxd` is not installed.** jolt's self-contained link embeds the boot image
-  via `xxd -i` → `xxd` ships in the **`vim-common`** package.
-- These live in a **separate `RUN dnf install` layer placed after the Chez
-  build** so fixing them doesn't invalidate the ~4-minute Chez layer.
+  via `xxd -i`, and `xxd` ships in the **`vim-common`** package.
+- Both installs sit in a **separate `RUN dnf install` layer placed after the
+  Chez build**, so fixing them doesn't invalidate the ~4-minute Chez layer.
 
 ## arm64 and x86_64
 
@@ -74,5 +73,5 @@ Building for the architecture your machine isn't needs qemu. Docker Desktop
 ships it; on a plain Linux Docker Engine, a missing emulator fails the first
 `RUN` with `exec /bin/sh: exec format error`. Either build natively (on an
 x86_64 Linux host, `LAMBDA_ARCH=x86_64`) or register the emulator, e.g.
-`docker run --privileged --rm tonistiigi/binfmt --install arm64`. Expect an
-emulated Chez build to be several times slower.
+`docker run --privileged --rm tonistiigi/binfmt --install arm64`. An emulated
+Chez build is several times slower.

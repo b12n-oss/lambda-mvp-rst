@@ -14,12 +14,12 @@ REPORT RequestId: ... Duration: 4.60 ms Billed Duration: 5 ms Memory Size: 512 M
 - **Duration**: the handler's own execution time (the Runtime API loop's
   `next-invocation` → `handler` → `post-response` round trip). Present on
   every invocation, cold or warm.
-- **Billed Duration**: what you're actually charged for. For a custom
-  runtime this *includes* Init Duration on a cold invoke.
+- **Billed Duration**: what you're charged for. For a custom runtime this
+  *includes* Init Duration on a cold invoke.
 
 `jolt invoke` prints this line directly. `script/bench.clj`'s
-`parse-report-line` turns it into a Clojure map; `Init Duration`'s absence is
-exactly how a warm sample is told apart from a cold one.
+`parse-report-line` turns it into a Clojure map, and a missing `Init Duration`
+is how a warm sample is told apart from a cold one.
 
 ## What `jolt bench` does
 
@@ -27,12 +27,13 @@ For each memory tier in `BENCH_MEMORY_TIERS` (default `2048,3008`):
 
 1. `aws lambda update-function-configuration --memory-size <tier>`: any
    configuration update invalidates the function's existing execution
-   environments, so the very next invoke runs in a fresh one. No separate
-   "force cold start" trick needed.
-2. Waits for the update to finish applying, then invokes once, the cold
+   environments, so the next invoke runs in a fresh one without any separate
+   "force cold start" trick.
+2. Waits for the update to finish applying, then invokes once: the cold
    sample.
-3. Invokes `BENCH_WARM_SAMPLES` more times back-to-back (no further config
-   change), the warm samples, landing on the same execution environment.
+3. Invokes `BENCH_WARM_SAMPLES` more times back-to-back with no further
+   config change: the warm samples, which land on the same execution
+   environment.
 4. Prints a table: Cold Init Duration, Cold Duration, Warm Duration
    (min/median/max), Max Memory Used, one column per tier.
 
@@ -40,10 +41,9 @@ The default tiers start at 2048 MB because jolt v0.8.5+ caps its heap at
 25% of the configured Lambda memory, and this runtime's baseline live
 heap (~250 MB, regardless of app size) needs at least that much
 headroom. Below it, every invocation fails at boot with
-`JOLT_MAX_HEAP is smaller than the runtime's own live heap`, not a
-timing problem `jolt bench` can usefully measure. If you lower
-`BENCH_MEMORY_TIERS` below ~2048 MB yourself, expect to see exactly
-that error rather than a number.
+`JOLT_MAX_HEAP is smaller than the runtime's own live heap`, which
+`jolt bench` can't turn into a timing. If you lower `BENCH_MEMORY_TIERS`
+below ~2048 MB, expect that error instead of a number.
 
 Run it:
 
@@ -53,19 +53,18 @@ jolt bench
 jolt teardown   # when you're done -- nothing should keep running in your account
 ```
 
-Two things worth knowing before you run it. `jolt bench` leaves the function
-configured at its last tier's memory size (3008 MB by default): a later
-`jolt deploy` resets it back to 2048 MB, but if you only ever run `jolt bench`
-you're left on the higher-cost tier. And `jolt deploy`/`jolt bench`/`jolt teardown`
+Two things to know before you run it. `jolt bench` leaves the function
+configured at its last tier's memory size (3008 MB by default). A later
+`jolt deploy` resets it to 2048 MB, but if you only ever run `jolt bench`
+you stay on the higher-cost tier. And `jolt deploy`/`jolt bench`/`jolt teardown`
 all act on whatever function/role name is configured
 (`LAMBDA_MVP_FUNCTION_NAME`, default `lambda-mvp-jlt`), so don't point it at
-an existing unrelated resource, since `jolt deploy` will overwrite its code
-and `jolt teardown` will delete it.
+an existing unrelated resource: `jolt deploy` overwrites its code
+and `jolt teardown` deletes it.
 
 If a "cold" sample shows no Init Duration, `jolt bench` prints a warning
-rather than silently reporting incomplete data. That would mean the
-execution environment wasn't actually fresh, worth investigating rather than
-trusting the number.
+instead of reporting incomplete data. The execution environment wasn't
+fresh, so investigate before trusting the number.
 
 ## This repo's own baseline
 
@@ -84,34 +83,34 @@ teardown` end to end (`dist/bootstrap`: 15,583,888 bytes / 14.86 MiB,
 | Warm Duration (min/median/max) | 1.7 / 1.9 / 2.0 ms | 1.7 / 1.9 / 2.0 ms |
 | Max Memory Used | 168 MB | 168 MB |
 
-**Illustrative, not a live guarantee**: a single `bb bench` run (one cold +
-five warm samples per tier, one region), and the numbers above are in the
+**Illustrative, not a live guarantee**: this is a single `bb bench` run (one
+cold + five warm samples per tier, one region). The numbers are in the
 same ballpark as `lambda-mvp-jlt`'s own unmodified-JSON-string-building
-baseline — the Rust FFI call adds no measurable cold or warm overhead at
-this sample size. Re-run `bb deploy && bb bench && bb teardown` yourself
-for a number specific to your own account/region/hardware allocation.
+baseline, so the Rust FFI call adds no measurable cold or warm overhead at
+this sample size. Re-run `bb deploy && bb bench && bb teardown` for a number
+specific to your own account, region, and hardware allocation.
 
 ### v0.8.6 vs v0.8.7, and multi-region: not yet re-run in this fork
 
 The previous revision of this section carried over a `us-west-2` /
 `ap-southeast-2` comparison table and a `v0.8.6` vs `v0.8.7` rebuild
 comparison from `lambda-mvp-jlt`'s own docs, mislabeled as "this repo's
-own baseline" even though neither had actually been re-run against
+own baseline" even though neither had been re-run against
 `lambda-mvp-rst`. Both have been removed pending an actual re-run in this
 fork (each requires either switching AWS regions or rebuilding the image
 twice with different `JOLT_VERSION` build-args, deploying, and
-benchmarking each — more than the scope of the single-region baseline
-above). See "What the source research project found" below for the
-inherited, clearly-attributed historical numbers from `lambda-mvp-jlt`
+benchmarking each, which is more than the single-region baseline
+above covers). See "What the source research project found" below for the
+inherited, clearly attributed historical numbers from `lambda-mvp-jlt`
 instead.
 
 That gap is now partly closed. A `v0.8.7` vs `v0.8.9` comparison **has** been
-run against this fork's own binary, and it is the next section. Multi-region
+run against this fork's own binary, in the next section. Multi-region
 and `v0.8.6` remain un-rerun here.
 
 ### v0.8.7 vs v0.8.9, three runs each
 
-jolt v0.8.9 landed on 2026-09-18. Measured against this fork's own binary,
+jolt v0.8.9 was released on 2026-09-18. Measured against this fork's own binary,
 same function, same region (`ap-southeast-2`), `AWS_PROFILE=b12n`, redeployed
 with `JOLT_VERSION=0.8.7` then `JOLT_VERSION=0.8.9` back to back on
 2026-09-19. Cold Init is noisy enough that one sample per tier says very
@@ -127,25 +126,25 @@ version per tier:
 | Max Memory Used | 168 MB | 187 MB | 168 MB | 187 MB |
 
 **Warm Duration improved at both tiers**, 2.1 down to 1.9 ms and 2.0 down to
-1.8 ms. That is the one movement here that points the same way in every run.
+1.8 ms. It is the one movement here that points the same way in every run.
 
 **Cold Duration is a wash in this fork.** It reads better at 2048 MB and worse
 at 3008 MB, and the full sample sets overlap almost completely (0.8.7 spans
 1.9-2.9 ms, 0.8.9 spans 2.0-3.2 ms). The `lambda-mvp-jlt` sibling, whose
 binary has no Rust FFI in it, did see a clean Cold Duration win over the same
-version bump, so the honest reading is that this fork's extra
-`libjson_capi.so` work sits in the same few milliseconds and blurs it.
+version bump, so this fork's extra `libjson_capi.so` work probably sits in
+the same few milliseconds and blurs it.
 
 **Cold Init supports no claim either way.** Both medians moved up, both ranges
 are wide, and they overlap.
 
-**Max Memory Used rose from 168 MB to 187 MB**, about 11%, rock steady across
-all six runs. `dist/bootstrap` grew with it, 15,577,392 bytes under 0.8.7 to
+**Max Memory Used rose from 168 MB to 187 MB**, about 11%, and stayed there
+across all six runs. `dist/bootstrap` grew with it, 15,577,392 bytes under 0.8.7 to
 17,405,184 under 0.8.9, about 12%. The sibling saw the same roughly 11% memory
-rise on a binary without the Rust builder, so this is jolt's own change rather
-than anything `jolt-diplomat` contributes.
+rise on a binary without the Rust builder, so the cause is jolt's own change
+and not `jolt-diplomat`.
 
-Worth recording for anyone tracking the vendored fork: the
+For anyone tracking the vendored fork: the
 `burinc/jolt-diplomat` `feat/json-builder-api` branch **builds clean against
 jolt v0.8.9** with no source changes, and `libjson_capi.so` /
 `libjson_capi_shim.so` land in `lib/` exactly as before.
@@ -155,10 +154,10 @@ jolt v0.8.9** with no source changes, and `libjson_capi.so` /
 Measured in the private project this repo was extracted from (`us-east-1`,
 `provided.al2023`, arm64, 2026-07-18, **illustrative, not a live
 guarantee**; your numbers will differ by account, region, and the hardware
-allocation AWS happens to give you). They were measured against that project's
+allocation AWS gives you). They were measured against that project's
 then-current jolt v0.7.14 pin, before the v0.8.5 heap ceiling existed, so the
-256 and 512 MB tiers shown below are not reproducible against this repo's own
-jolt v0.8.9 default, for the reason the heap-ceiling note above describes:
+256 and 512 MB tiers below can't be reproduced against this repo's own
+jolt v0.8.9 default, for the reason the heap-ceiling note above gives:
 
 | Metric | 256 MB | 512 MB |
 |---|---|---|
@@ -169,9 +168,9 @@ jolt v0.8.9 default, for the reason the heap-ceiling note above describes:
 
 Takeaways that held in that project: warm invocations are consistently in
 the low single-digit milliseconds once a sandbox has served an event; cold
-init is dominated by process/runtime startup, not the handler; max memory is
-roughly constant (the Chez heap) regardless of the configured limit, as long
-as the limit is above that floor.
+init is dominated by process/runtime startup, not the handler; and max memory
+is roughly constant (the Chez heap) regardless of the configured limit, as
+long as the limit is above that floor.
 
 ## Reproducing the jolt-version finding
 
@@ -180,14 +179,14 @@ result: warm invokes got materially faster (jolt's own vfasl boot-image work
 and general runtime tightening), but cold `Init Duration` got slower for
 that project's specific binary, because the binary itself grew substantially
 between the two pins (unrelated dependency growth, not jolt's own boot
-format). That's a finding specific to what was linked into that binary, not
-a general claim about the jolt version bump, which is exactly why it's
-worth reproducing against *this* repo's own (much smaller than that
-project's, though no longer dependency-free now that it links
-`libjson_capi.so`/`libjson_capi_shim.so` for the Rust JSON builder) binary
-rather than taking the number on faith. Not yet re-run against
-`lambda-mvp-rst` specifically (see the previous section) — the recipe
-below is unchanged and still applies:
+format). The finding depends on what was linked into that binary and says
+nothing general about the jolt version bump, so it's worth reproducing
+against *this* repo's own binary (much smaller than that project's, though no
+longer dependency-free now that it links
+`libjson_capi.so`/`libjson_capi_shim.so` for the Rust JSON builder) rather
+than taking the number on faith. It hasn't been re-run against
+`lambda-mvp-rst` specifically (see the previous section), and the recipe
+below still applies:
 
 ```sh
 JOLT_VERSION=0.7.14 jolt image && jolt deploy && jolt bench   # note the table

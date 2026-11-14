@@ -14,10 +14,10 @@ speaks the Runtime API, plain HTTP on a loopback address, no TLS:
 | Handler error | `POST /2018-06-01/runtime/invocation/{request-id}/error` |
 | Startup error | `POST /2018-06-01/runtime/init/error` |
 
-The load-bearing subtlety: **the request id arrives as a response header on
-`/next`**, so the HTTP client must expose headers. Jolt's
-`jolt-lang/http-client` (clj-http-lite on jolt host shims) returns
-`{:status :headers :body}` with lowercase string header keys, exactly enough.
+The request id arrives as a **response header on `/next`**, so the HTTP client
+must expose headers. Jolt's `jolt-lang/http-client` (clj-http-lite on jolt host
+shims) returns `{:status :headers :body}` with lowercase string header keys,
+which is enough.
 
 ## The jolt implementation
 
@@ -44,9 +44,9 @@ Design notes:
   Gone, and error-path POSTs must never take down the loop).
 - **No JSON dependency in the loop.** The event passes through as a raw string;
   the demo handler embeds it verbatim in its response (`",\"event\":" event-json`),
-  legal because the event is already JSON.
-- **No timeout on `/next`.** The GET blocks until the next invocation; Lambda
-  freezes the sandbox between events, so wall-clock time there is free.
+  which is legal because the event is already JSON.
+- **No timeout on `/next`.** The GET blocks until the next invocation, and
+  Lambda freezes the sandbox between events, so wall-clock time there is free.
 - **Handler contract**: `(fn [event-json ctx]) -> response-json-string`, with
   `ctx` = `{:request-id :deadline-ms :invoked-arn :trace-id}`.
 
@@ -66,7 +66,7 @@ mock-runtime-api: PASS
 runtime: /invocation/next returned 410 -- exiting
 ```
 
-This makes runtime-loop changes a ~2-second local iteration, with the identical
+Runtime-loop changes therefore iterate in ~2 seconds locally, on the identical
 code path that runs on Lambda (only `AWS_LAMBDA_RUNTIME_API` differs).
 
 ## What the loop deliberately skips
